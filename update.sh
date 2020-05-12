@@ -4,10 +4,6 @@ shopt -s nullglob
 
 # https://www.python.org/downloads/23Introduction (under "OpenPGP Public Keys")
 declare -A gpgKeys=(
-	# gpg: key 18ADD4FF: public key "Benjamin Peterson <benjamin@python.org>" imported
-	[2.7]='C01E1CAD5EA2C4F0B8E3571504C367C218ADD4FF'
-	# https://www.python.org/dev/peps/pep-0373/#release-manager-and-crew
-
 	# gpg: key F73C700D: public key "Larry Hastings <larry@hastings.org>" imported
 	[3.5]='97FC712E4C024BBEA48A61ED3A5CA953F73C700D'
 	# https://www.python.org/dev/peps/pep-0478/#release-manager-and-crew
@@ -53,8 +49,6 @@ generated_warning() {
 	EOH
 }
 
-travisEnv=
-appveyorEnv=
 for version in "${versions[@]}"; do
 	rcVersion="${version%-rc}"
 	rcGrepV='-v'
@@ -139,9 +133,6 @@ for version in "${versions[@]}"; do
 			# use "debian:*-slim" variants for "python:*-slim" variants
 			tag+='-slim'
 		fi
-		if [[ "$version" == 2.* ]]; then
-			template="caveman-${template}"
-		fi
 		template="Dockerfile-${template}.template"
 
 		{ generated_warning; cat "$template"; } > "$dir/Dockerfile"
@@ -178,32 +169,12 @@ for version in "${versions[@]}"; do
 		major="${rcVersion%%.*}"
 		minor="${rcVersion#$major.}"
 		minor="${minor%%.*}"
-		if [ "$major" -gt 3 ] || { [ "$major" -eq 3 ] && [ "$minor" -ge 8 ]; }; then
+		if [ "$minor" -ge 8 ]; then
 			# PROFILE_TASK has a reasonable default starting in 3.8+; see:
 			#   https://bugs.python.org/issue36044
 			#   https://github.com/python/cpython/pull/14702
 			#   https://github.com/python/cpython/pull/14910
 			perl -0 -i -p -e "s![^\n]+PROFILE_TASK(='[^']+?')?[^\n]+\n!!gs" "$dir/Dockerfile"
 		fi
-
-		case "$v" in
-			# https://www.appveyor.com/docs/windows-images-software/
-			windows/*-1809)
-				appveyorEnv='\n    - version: '"$version"'\n      variant: '"$variant"'\n      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019'"$appveyorEnv"
-				;;
-			windows/*-ltsc2016)
-				appveyorEnv='\n    - version: '"$version"'\n      variant: '"$variant"'\n      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017'"$appveyorEnv"
-				;;
-
-			*)
-				travisEnv='\n    - os: linux\n      env: VERSION='"$version VARIANT=$v$travisEnv"
-				;;
-		esac
 	done
 done
-
-travis="$(awk -v 'RS=\n\n' '$1 == "matrix:" { $0 = "matrix:\n  include:'"$travisEnv"'" } { printf "%s%s", $0, RS }' .travis.yml)"
-echo "$travis" > .travis.yml
-
-appveyor="$(awk -v 'RS=\n\n' '$1 == "environment:" { $0 = "environment:\n  matrix:'"$appveyorEnv"'" } { printf "%s%s", $0, RS }' .appveyor.yml)"
-echo "$appveyor" > .appveyor.yml
